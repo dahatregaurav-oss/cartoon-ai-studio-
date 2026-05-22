@@ -1,0 +1,803 @@
+
+
+```html
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlipCanvas Pro - 2D Animation Tool</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0d1117;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        canvas {
+            display: block;
+            background: #1a1a1a;
+            border-radius: 8px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .tool-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: #1e1e1e;
+            border: 2px solid #333;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tool-btn:hover {
+            background: #2a2a2a;
+            transform: scale(1.05);
+        }
+        
+        .tool-btn.active {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        
+        .layer-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        
+        .layer-item:hover {
+            background: #1e1e1e;
+        }
+        
+        .layer-item.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .timeline-frame {
+            width: 80px;
+            height: 60px;
+            background: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        .timeline-frame:hover {
+            border-color: #555;
+        }
+        
+        .timeline-frame.current {
+            border-color: #3b82f6;
+            border-width: 3px;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+        }
+        
+        .color-circle {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+        }
+        
+        .color-circle:hover {
+            transform: scale(1.1);
+        }
+        
+        .color-circle.active {
+            border-color: white;
+            box-shadow: 0 0 8px rgba(255,255,255,0.5);
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Container -->
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-gray-900 border-b border-gray-800 px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-2xl font-bold text-blue-400">
+                        <i class="fas fa-film mr-2"></i>FlipCanvas Pro
+                    </h1>
+                    <div class="text-sm text-gray-400">
+                        <span id="frameCounter">Frame 1/1</span>
+                        <span class="mx-2">•</span>
+                        <span id="fpsDisplay">12 FPS</span>
+                    </div>
+                </div>
+                <button onclick="exportImage()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg">
+                    <i class="fas fa-download mr-2"></i>Export PNG
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Left Sidebar - Tools -->
+            <div class="w-16 bg-gray-900 border-r border-gray-800 flex flex-col items-center py-4 space-y-4">
+                <h3 class="text-xs text-gray-500 mb-2">TOOLS</h3>
+                
+                <button onclick="setTool('pen')" class="tool-btn active" title="Pen Tool">
+                    <i class="fas fa-pen"></i>
+                </button>
+                
+                <button onclick="setTool('pencil')" class="tool-btn" title="Pencil Tool">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                
+                <button onclick="setTool('eraser')" class="tool-btn" title="Eraser">
+                    <i class="fas fa-eraser"></i>
+                </button>
+                
+                <div class="h-px w-8 bg-gray-800 my-4"></div>
+                
+                <h3 class="text-xs text-gray-500 mb-2">COLORS</h3>
+                <div id="colorPalette" class="flex flex-col gap-2">
+                    <!-- Colors will be added by JavaScript -->
+                </div>
+                
+                <div class="h-px w-8 bg-gray-800 my-4"></div>
+                
+                <div class="text-center">
+                    <div class="text-xs text-gray-400 mb-1">Size</div>
+                    <input type="range" min="1" max="50" value="5" 
+                           oninput="changeBrushSize(this.value)" 
+                           class="w-12 -rotate-90 mt-6">
+                    <div id="brushSizeValue" class="text-xs mt-2">5px</div>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <div class="text-xs text-gray-400 mb-1">Opacity</div>
+                    <input type="range" min="10" max="100" value="100" 
+                           oninput="changeOpacity(this.value)"
+                           class="w-12 -rotate-90 mt-6">
+                    <div id="opacityValue" class="text-xs mt-2">100%</div>
+                </div>
+            </div>
+
+            <!-- Canvas Area -->
+            <div class="flex-1 flex flex-col">
+                <div class="flex-1 flex items-center justify-center p-4">
+                    <div class="relative">
+                        <canvas id="drawingCanvas" width="800" height="450"></canvas>
+                        <div class="absolute bottom-2 right-2 text-xs bg-black bg-opacity-70 px-2 py-1 rounded">
+                            800×450 | 16:9
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 border-t border-gray-800">
+                    <h3 class="text-lg font-semibold mb-3">Background</h3>
+                    <div class="flex gap-3">
+                        <input type="color" id="bgColor" value="#1a1a1a" 
+                               onchange="changeBackgroundColor(this.value)"
+                               class="h-10 w-16 cursor-pointer">
+                        <button onclick="clearCanvas()" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded">
+                            <i class="fas fa-broom mr-2"></i>Clear Canvas
+                        </button>
+                        <input type="file" id="bgImage" accept="image/*" 
+                               onchange="loadBackgroundImage(this)" 
+                               class="hidden">
+                        <button onclick="document.getElementById('bgImage').click()" 
+                                class="bg-blue-800 hover:bg-blue-700 px-4 py-2 rounded">
+                            <i class="fas fa-image mr-2"></i>Import BG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar - Layers -->
+            <div class="w-64 bg-gray-900 border-l border-gray-800">
+                <div class="p-4 border-b border-gray-800">
+                    <h2 class="text-lg font-semibold flex items-center justify-between">
+                        <span>Layers</span>
+                        <button onclick="addLayer()" class="text-blue-400 hover:text-blue-300">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </h2>
+                </div>
+                <div id="layersContainer" class="overflow-y-auto h-[calc(100%-70px)]">
+                    <!-- Layers will be added here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Panel - Timeline -->
+        <div class="bg-gray-900 border-t border-gray-800">
+            <!-- Timeline Controls -->
+            <div class="px-4 py-3 flex items-center justify-between bg-gray-950">
+                <div class="flex items-center gap-4">
+                    <button onclick="togglePlayback()" id="playBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded">
+                        <i class="fas fa-play mr-2"></i>Play
+                    </button>
+                    <button onclick="addFrame()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+                        <i class="fas fa-plus mr-2"></i>Add Frame
+                    </button>
+                    <button onclick="duplicateFrame()" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded">
+                        <i class="fas fa-copy mr-2"></i>Duplicate
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm">FPS:</span>
+                        <input type="range" min="1" max="24" value="12" 
+                               oninput="changeFPS(this.value)" class="w-24">
+                        <span id="fpsValue" class="text-sm">12</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="onionSkin" onchange="toggleOnionSkin()">
+                        <label for="onionSkin" class="text-sm cursor-pointer">Onion Skin</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline Frames -->
+            <div class="px-4 py-3">
+                <div id="timelineContainer" class="flex gap-2 overflow-x-auto py-2">
+                    <!-- Frames will be added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // ====================
+        // GLOBAL VARIABLES
+        // ====================
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let isDrawing = false;
+        let currentTool = 'pen';
+        let currentColor = '#ffffff';
+        let brushSize = 5;
+        let opacity = 1.0;
+        let frames = [{}]; // Frame data storage
+        let currentFrame = 0;
+        let layers = [
+            { id: 0, name: 'Background', visible: true, opacity: 100 },
+            { id: 1, name: 'Drawing', visible: true, opacity: 100 }
+        ];
+        let activeLayer = 1;
+        let isPlaying = false;
+        let fps = 12;
+        let onionSkinEnabled = false;
+        let lastX = 0, lastY = 0;
+
+        // ====================
+        // INITIALIZATION
+        // ====================
+        function init() {
+            setupCanvas();
+            setupColors();
+            setupLayers();
+            setupTimeline();
+            drawGrid();
+            updateFrameCounter();
+        }
+
+        function setupCanvas() {
+            // Set canvas size
+            canvas.width = 800;
+            canvas.height = 450;
+            
+            // Event listeners for mouse
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Event listeners for touch
+            canvas.addEventListener('touchstart', handleTouchStart);
+            canvas.addEventListener('touchmove', handleTouchMove);
+            canvas.addEventListener('touchend', stopDrawing);
+            
+            // Prevent context menu
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        function setupColors() {
+            const colors = [
+                '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
+                '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55',
+                '#8e8e93', '#d1d1d6', '#e5e5ea', '#f2f2f7'
+            ];
+            
+            const palette = document.getElementById('colorPalette');
+            palette.innerHTML = '';
+            
+            colors.forEach(color => {
+                const circle = document.createElement('div');
+                circle.className = 'color-circle';
+                circle.style.backgroundColor = color;
+                circle.title = color;
+                
+                if (color === currentColor) {
+                    circle.classList.add('active');
+                }
+                
+                circle.onclick = () => {
+                    document.querySelectorAll('.color-circle').forEach(c => c.classList.remove('active'));
+                    circle.classList.add('active');
+                    currentColor = color;
+                };
+                
+                palette.appendChild(circle);
+            });
+        }
+
+        function setupLayers() {
+            const container = document.getElementById('layersContainer');
+            container.innerHTML = '';
+            
+            layers.forEach(layer => {
+                const layerDiv = document.createElement('div');
+                layerDiv.className = `layer-item ${layer.id === activeLayer ? 'active' : ''}`;
+                layerDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-${layer.visible ? 'eye' : 'eye-slash'}" 
+                           onclick="toggleLayerVisibility(${layer.id})"></i>
+                        <span>${layer.name}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="range" min="0" max="100" value="${layer.opacity}" 
+                               oninput="changeLayerOpacity(${layer.id}, this.value)"
+                               class="w-16" style="transform: scale(0.8);">
+                        <span class="text-xs">${layer.opacity}%</span>
+                    </div>
+                `;
+                
+                layerDiv.onclick = () => setActiveLayer(layer.id);
+                container.appendChild(layerDiv);
+            });
+        }
+
+        function setupTimeline() {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+            
+            frames.forEach((frame, index) => {
+                const frameDiv = document.createElement('div');
+                frameDiv.className = `timeline-frame ${index === currentFrame ? 'current' : ''}`;
+                frameDiv.innerHTML = `
+                    <div class="h-4 bg-gray-800 text-xs flex items-center justify-center">
+                        ${index + 1}
+                    </div>
+                    <div class="flex-1 flex items-center justify-center">
+                        <i class="fas fa-film text-gray-600"></i>
+                    </div>
+                `;
+                
+                frameDiv.onclick = () => switchFrame(index);
+                container.appendChild(frameDiv);
+            });
+        }
+
+        // ====================
+        // DRAWING FUNCTIONS
+        // ====================
+        function drawGrid() {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let x = 0; x <= canvas.width; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let y = 0; y <= canvas.height; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            
+            if (currentTool === 'pen' || currentTool === 'pencil') {
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = opacity;
+            }
+            
+            drawDot(lastX, lastY);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            switch(currentTool) {
+                case 'pen':
+                case 'pencil':
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    break;
+                    
+                case 'eraser':
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.beginPath();
+                    ctx.arc(x, y, brushSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                    break;
+            }
+            
+            lastX = x;
+            lastY = y;
+        }
+
+        function drawDot(x, y) {
+            if (currentTool === 'pen' || currentTool === 'pencil') {
+                ctx.beginPath();
+                ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+                ctx.fillStyle = currentColor;
+                ctx.globalAlpha = opacity;
+                ctx.fill();
+            }
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                ctx.closePath();
+                saveFrameState();
+            }
+        }
+
+        // ====================
+        // TOUCH SUPPORT
+        // ====================
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        // ====================
+        // TOOL FUNCTIONS
+        // ====================
+        function setTool(tool) {
+            currentTool = tool;
+            
+            // Update UI
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function changeBrushSize(size) {
+            brushSize = parseInt(size);
+            document.getElementById('brushSizeValue').textContent = `${brushSize}px`;
+        }
+
+        function changeOpacity(value) {
+            opacity = value / 100;
+            document.getElementById('opacityValue').textContent = `${value}%`;
+        }
+
+        // ====================
+        // FRAME MANAGEMENT
+        // ====================
+        function addFrame() {
+            // Save current frame state
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            frames[currentFrame].imageData = imageData;
+            
+            // Add new frame
+            frames.push({});
+            currentFrame = frames.length - 1;
+            
+            // Clear canvas for new frame
+            drawGrid();
+            
+            // Update UI
+            setupTimeline();
+            updateFrameCounter();
+        }
+
+        function duplicateFrame() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            frames.push({ imageData: imageData });
+            currentFrame = frames.length - 1;
+            
+            // Reset onion skin
+            onionSkinEnabled = false;
+            document.getElementById('onionSkin').checked = false;
+            
+            setupTimeline();
+            updateFrameCounter();
+        }
+
+        function switchFrame(index) {
+            // Save current frame
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            frames[currentFrame].imageData = imageData;
+            
+            // Switch to new frame
+            currentFrame = index;
+            
+            // Restore frame data
+            if (frames[currentFrame].imageData) {
+                ctx.putImageData(frames[currentFrame].imageData, 0, 0);
+            } else {
+                drawGrid();
+            }
+            
+            // Update UI
+            setupTimeline();
+            updateFrameCounter();
+            
+            if (onionSkinEnabled) {
+                applyOnionSkin();
+            }
+        }
+
+        function saveFrameState() {
+            // Save current drawing to frame
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            frames[currentFrame].imageData = imageData;
+        }
+
+        // ====================
+        // LAYER FUNCTIONS
+        // ====================
+        function addLayer() {
+            const newId = layers.length;
+            layers.push({
+                id: newId,
+                name: `Layer ${newId + 1}`,
+                visible: true,
+                opacity: 100
+            });
+            setupLayers();
+        }
+
+        function toggleLayerVisibility(layerId) {
+            const layer = layers.find(l => l.id === layerId);
+            if (layer) {
+                layer.visible = !layer.visible;
+                setupLayers();
+            }
+        }
+
+        function changeLayerOpacity(layerId, value) {
+            const layer = layers.find(l => l.id === layerId);
+            if (layer) {
+                layer.opacity = parseInt(value);
+                setupLayers();
+            }
+        }
+
+        function setActiveLayer(layerId) {
+            activeLayer = layerId;
+            setupLayers();
+        }
+
+        // ====================
+        // BACKGROUND FUNCTIONS
+        // ====================
+        function changeBackgroundColor(color) {
+            // Get current drawing
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Draw new background
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Restore drawing
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function loadBackgroundImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // Clear and draw image
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    drawGrid(); // Grid on top
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearCanvas() {
+            drawGrid();
+            saveFrameState();
+        }
+
+        // ====================
+        // TIMELINE & PLAYBACK
+        // ====================
+        function togglePlayback() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('playBtn');
+            
+            if (isPlaying) {
+                btn.innerHTML = '<i class="fas fa-pause mr-2"></i>Pause';
+                btn.className = 'bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded';
+                startPlayback();
+            } else {
+                btn.innerHTML = '<i class="fas fa-play mr-2"></i>Play';
+                btn.className = 'bg-green-600 hover:bg-green-700 px-4 py-2 rounded';
+            }
+        }
+
+        function startPlayback() {
+            if (!isPlaying) return;
+            
+            let frameIndex = currentFrame;
+            const interval = 1000 / fps;
+            
+            function playNextFrame() {
+                if (!isPlaying) return;
+                
+                frameIndex = (frameIndex + 1) % frames.length;
+                switchFrame(frameIndex);
+                
+                setTimeout(playNextFrame, interval);
+            }
+            
+            setTimeout(playNextFrame, interval);
+        }
+
+        function changeFPS(value) {
+            fps = parseInt(value);
+            document.getElementById('fpsValue').textContent = fps;
+            document.getElementById('fpsDisplay').textContent = `${fps} FPS`;
+        }
+
+        function toggleOnionSkin() {
+            onionSkinEnabled = !onionSkinEnabled;
+            if (onionSkinEnabled) {
+                applyOnionSkin();
+            } else {
+                // Clear onion skin by redrawing current frame
+                switchFrame(currentFrame);
+            }
+        }
+
+        function applyOnionSkin() {
+            if (currentFrame === 0 || !onionSkinEnabled) return;
+            
+            // Get previous frame
+            const prevFrame = frames[currentFrame - 1];
+            if (!prevFrame.imageData) return;
+            
+            // Create temporary canvas for onion skin
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Draw previous frame with opacity
+            tempCtx.putImageData(prevFrame.imageData, 0, 0);
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.globalAlpha = 1.0;
+        }
+
+        // ====================
+        // EXPORT
+        // ====================
+        function exportImage() {
+            // Create temporary canvas for export
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height;
+            const exportCtx = exportCanvas.getContext('2d');
+            
+            // Draw current frame
+            exportCtx.putImageData(ctx.getImageData(0, 0, canvas.width, canvas.height), 0, 0);
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.download = `flipcanvas-frame-${currentFrame + 1}.png`;
+            link.href = exportCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function updateFrameCounter() {
+            document.getElementById('frameCounter').textContent = 
+                `Frame ${currentFrame + 1}/${frames.length}`;
+        }
+
+        // ====================
+        // INITIALIZE
+        // ====================
+        window.onload = init;
+    </script>
+</body>
+</html>
+```
+
